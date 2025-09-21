@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>首相候補 図鑑＆バトル（ポケモン風・創作）</title>
+
+  <!-- Tailwind CSS（Play CDN）: 手早くデザインを整えるためのCSSフレームワーク -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* ふわっと上下に揺れる簡易アニメーション（Framer未使用の純CSS） */
+    @keyframes floatY { 0%{transform:translateY(0)} 50%{transform:translateY(-6px)} 100%{transform:translateY(0)} }
+    .floaty { animation: floatY 4s ease-in-out infinite; }
+  </style>
+</head>
+<body class="min-h-screen bg-gradient-to-b from-slate-50 to-white text-slate-900">
+  <header class="sticky top-0 z-10 border-b border-slate-200 backdrop-blur supports-[backdrop-filter]:bg-white/70">
+    <div class="mx-auto max-w-6xl px-4 py-3">
+      <div class="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 class="text-2xl font-bold tracking-tight">首相候補 図鑑（ポケモン風）</h1>
+          <p class="text-sm text-slate-600">※創作。人物評価の断定ではありません。数値・相性はフィクションです。</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <input id="q" placeholder="名前で検索" class="w-48 rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-slate-400" />
+          <select id="typeFilter" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-slate-400"></select>
+          <select id="sortSel" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm focus:ring-2 focus:ring-slate-400">
+            <option value="no">番号順</option>
+            <option value="name">名前順</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-6xl px-4 py-8">
+    <!-- 図鑑カードを並べる領域 -->
+    <div id="cards" class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"></div>
+    <p id="emptyMsg" class="hidden mt-8 text-center text-slate-600">該当が見つかりませんでした。</p>
+
+    <!-- バトルエリア -->
+    <section class="mt-10 rounded-2xl border border-slate-200 bg-white p-4">
+      <h2 class="mb-3 text-base font-semibold">バトル</h2>
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <!-- 左側（プレイヤー1） -->
+        <div class="rounded-xl border border-slate-200 p-3">
+          <div class="mb-2"><select id="selP1" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm"></select></div>
+          <div class="flex items-center gap-3">
+            <div id="ava1" class="floaty h-24 w-24"></div>
+            <div class="w-full">
+              <div class="flex items-center justify-between text-sm"><span id="name1" class="font-medium"></span><span><span id="hp1">100</span>/100</span></div>
+              <div class="h-2 w-full rounded bg-slate-200"><div id="hpbar1" class="h-2 rounded bg-emerald-500" style="width:100%"></div></div>
+            </div>
+          </div>
+          <div id="moves1" class="mt-3 grid grid-cols-2 gap-2"></div>
+        </div>
+        <!-- 右側（プレイヤー2） -->
+        <div class="rounded-xl border border-slate-200 p-3">
+          <div class="mb-2"><select id="selP2" class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm"></select></div>
+          <div class="flex items-center gap-3">
+            <div id="ava2" class="floaty h-24 w-24"></div>
+            <div class="w-full">
+              <div class="flex items-center justify-between text-sm"><span id="name2" class="font-medium"></span><span><span id="hp2">100</span>/100</span></div>
+              <div class="h-2 w-full rounded bg-slate-200"><div id="hpbar2" class="h-2 rounded bg-emerald-500" style="width:100%"></div></div>
+            </div>
+          </div>
+          <div id="moves2" class="mt-3 grid grid-cols-2 gap-2"></div>
+        </div>
+      </div>
+      <div class="mt-4 flex flex-wrap items-center gap-2">
+        <button id="resetBtn" class="rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">リセット</button>
+        <span id="turnLbl" class="text-sm text-slate-600"></span>
+      </div>
+      <div id="log" class="mt-3 max-h-40 overflow-auto rounded-xl border border-slate-200 bg-gray-50 p-2 text-sm text-slate-800">
+        <div class="text-slate-500">ログはここに表示されます。</div>
+      </div>
+    </section>
+
+    <section class="mt-10 rounded-2xl border border-slate-200 bg-white p-4 text-sm leading-6 text-slate-700">
+      <h2 class="mb-1 text-base font-semibold">注意</h2>
+      <ul class="list-disc pl-5">
+        <li>このページは創作のUI表現です。数値・相性はフィクションです。</li>
+        <li>最新の政治動向はニュースをご確認ください。</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="mx-auto max-w-6xl px-4 py-12 text-center text-xs text-slate-500">© <span id="yy"></span> Poke-Style Dex (fictional)</footer>
+
+  <script>
+  // ======================== データ定義 ========================
+  // タイプに対応する色（Tailwindのユーティリティクラスを束ねる）
+  const TYPE_COLORS = {
+    "せいじ": "bg-indigo-200 border-indigo-400",
+    "けいざい": "bg-emerald-200 border-emerald-400",
+    "しゃかい": "bg-rose-200 border-rose-400",
+    "ぼうえい": "bg-yellow-200 border-yellow-400",
+    "ぼうえき": "bg-sky-200 border-sky-400",
+    "きょうわ": "bg-purple-200 border-purple-400",
+  };
+
+  // レーダーチャートの5能力キー
+  const STAT_KEYS = [
+    { key: "lead", label: "リーダーシップ" },
+    { key: "explain", label: "説明力" },
+    { key: "negotiate", label: "交渉力" },
+    { key: "execute", label: "実行力" },
+    { key: "crisis", label: "危機対応" },
+  ];
+
+  // 図鑑とバトルで使う候補データ（フィクション）
+  const CANDIDATES = [
+    { no:1, name:"小泉 進次郎", kana:"こいずみ しんじろう", emoji:"🌱", types:["せいじ","けいざい"],
+      height:"1.78m（イメージ）", weight:"—", ability:"メッセージング",
+      dex:"わかりやすい言葉で人を動かす。環境や家計のバランスを意識して戦う。",
+      moves:[
+        { name:"ビジョン共有", desc:"方向性を端的に示し士気を上げる。", power:70, accuracy:95 },
+        { name:"対話", desc:"多様な立場を聞いて妥協点を探す。", power:55, accuracy:100 },
+        { name:"調整", desc:"部門間の摩擦をやわらげ前進させる。", power:60, accuracy:95 },
+        { name:"家計ケア", desc:"負担感を下げる施策で支持を集める。", power:65, accuracy:90 },
+      ],
+      stats:{ lead:82, explain:88, negotiate:74, execute:68, crisis:63 }, strong:["しゃかい"], weak:["ぼうえい"] },
+    { no:2, name:"高市 早苗", kana:"たかいち さなえ", emoji:"⚡", types:["せいじ","ぼうえい"],
+      height:"—", weight:"—", ability:"ブレない軸",
+      dex:"安全保障と成長戦略を前に進める。決断が速い。",
+      moves:[
+        { name:"方針明示", desc:"優先順位を明確化し迷いを断つ。", power:75, accuracy:95 },
+        { name:"迅速対応", desc:"初動を早めて混乱を抑える。", power:70, accuracy:90 },
+        { name:"発信力", desc:"情報を広く届け支持を固める。", power:65, accuracy:95 },
+        { name:"サプライ強化", desc:"供給網の耐性を上げる。", power:62, accuracy:90 },
+      ],
+      stats:{ lead:86, explain:76, negotiate:68, execute:84, crisis:88 }, strong:["ぼうえい"], weak:["しゃかい"] },
+    { no:3, name:"林 芳正", kana:"はやし よしまさ", emoji:"🧭", types:["せいじ","ぼうえき"],
+      height:"—", weight:"—", ability:"かじ取り",
+      dex:"安定感のある舵取りで内外の利害を整える。",
+      moves:[
+        { name:"合意形成", desc:"関係者を巻き込んで収れん。", power:72, accuracy:95 },
+        { name:"丁寧な説明", desc:"納得感を高め反発を減らす。", power:60, accuracy:100 },
+        { name:"国際連携", desc:"同盟・近隣と調和を図る。", power:68, accuracy:95 },
+        { name:"工程管理", desc:"段取り良く実装を進める。", power:58, accuracy:95 },
+      ],
+      stats:{ lead:78, explain:85, negotiate:82, execute:73, crisis:70 }, strong:["ぼうえき"], weak:["けいざい"] },
+    { no:4, name:"小林 鷹之", kana:"こばやし たかゆき", emoji:"🛡️", types:["せいじ","しゃかい"],
+      height:"—", weight:"—", ability:"政策設計",
+      dex:"制度設計に強く、暮らしの安心を高める手を打つ。",
+      moves:[
+        { name:"制度見直し", desc:"古い仕組みをアップデート。", power:66, accuracy:95 },
+        { name:"ルール策定", desc:"抜け穴を塞ぎ公平性を上げる。", power:62, accuracy:95 },
+        { name:"課題抽出", desc:"実装前にリスクを洗い出す。", power:55, accuracy:100 },
+        { name:"地域ケア", desc:"現場の困りごとに寄りそう。", power:60, accuracy:95 },
+      ],
+      stats:{ lead:72, explain:74, negotiate:69, execute:77, crisis:71 }, strong:["しゃかい"], weak:["ぼうえき"] },
+    { no:5, name:"茂木 敏充", kana:"もてぎ としみつ", emoji:"🌐", types:["せいじ","ぼうえき"],
+      height:"—", weight:"—", ability:"ネゴシエーション",
+      dex:"交渉と実務に長け、合意をまとめて前に進める。",
+      moves:[
+        { name:"交渉", desc:"利害の折り合いをつける。", power:78, accuracy:95 },
+        { name:"落とし所", desc:"現実的な解を見つける。", power:70, accuracy:95 },
+        { name:"実行管理", desc:"決めたことを確実に回す。", power:73, accuracy:95 },
+        { name:"国際枠組み", desc:"多国間での整合を取る。", power:68, accuracy:90 },
+      ],
+      stats:{ lead:80, explain:77, negotiate:90, execute:82, crisis:75 }, strong:["ぼうえき"], weak:["しゃかい"] },
+  ];
+
+  // ======================== 共通ユーティリティ ========================
+  // 種子付きの簡易乱数（低ポリ多角形の形を個体ごとに安定させる）
+  function seededRand(seed, i) {
+    const x = Math.sin(seed * 999 + i * 77) * 10000; // Math.sinで擬似乱数源
+    return x - Math.floor(x); // 0〜1未満
+  }
+
+  // 低ポリゴン風アバターをSVG文字列として生成
+  function renderLowPoly(seed, emoji) {
+    // 8頂点の多角形を円周上に配置し、半径をseededRandでゆらす
+    const pts = Array.from({length:8}).map((_,i)=>{
+      const ang = (i/8) * Math.PI*2;
+      const r = 36 + seededRand(seed,i) * 22; // 半径を36〜58にゆらす
+      const x = 50 + Math.cos(ang) * r;
+      const y = 50 + Math.sin(ang) * r;
+      return `${x},${y}`;
+    }).join(' ');
+    // グラデと多角形、中央に絵文字
+    return `\n<svg viewBox="0 0 100 100" class="h-full w-full">\n  <defs>\n    <linearGradient id="grad-${seed}" x1="0" x2="1" y1="0" y2="1">\n      <stop offset="0%" stop-color="#c7d2fe"/>\n      <stop offset="100%" stop-color="#a7f3d0"/>\n    </linearGradient>\n  </defs>\n  <polygon points="${pts}" fill="url(#grad-${seed})" stroke="#334155" stroke-width="1.2"/>\n  <text x="50" y="54" font-size="22" text-anchor="middle" dominant-baseline="middle">${emoji}</text>\n</svg>`;
+  }
+
+  // レーダーチャートSVGを生成（五角形）：各能力(0-100)を半径70に正規化
+  function renderRadar(stats) {
+    const size = 160, center = size/2, radius = 70;
+    const toPoint = (idx, value)=>{
+      const angle = (-90 + (360/STAT_KEYS.length)*idx) * (Math.PI/180); // 上から開始
+      const r = (value/100) * radius;
+      const x = center + Math.cos(angle)*r;
+      const y = center + Math.sin(angle)*r;
+      return `${x},${y}`;
+    };
+    // 塗りつぶし多角形
+    const poly = STAT_KEYS.map((s,i)=>toPoint(i, stats[s.key])).join(' ');
+    // 補助グリッド（20刻み）
+    const grid = [20,40,60,80,100].map(v=>
+      `<polygon points="${STAT_KEYS.map((_,i)=>toPoint(i,v)).join(' ')}" class="fill-none" stroke="#e2e8f0"/>`
+    ).join('');
+    // ラベル
+    const labels = STAT_KEYS.map((s,i)=>{
+      const [x,y] = toPoint(i,110).split(',');
+      return `<text x="${x}" y="${y}" class="text-[10px]" fill="#475569" text-anchor="middle">${s.label}</text>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${size} ${size}" class="h-44 w-44">${grid}<polygon points="${poly}" fill="rgba(199,210,254,0.6)" stroke="#818cf8"/>${labels}</svg>`;
+  }
+
+  // タイプバッジ
+  function typeBadge(t){
+    const cls = TYPE_COLORS[t] || "bg-gray-200 border-gray-300";
+    return `<span class="border ${cls} text-gray-900 text-xs px-2 py-0.5 rounded-full">${t}</span>`;
+  }
+
+  // 小さなチップ
+  const pill = (txt)=>`<span class="rounded-full bg-gray-100 px-2 py-1 text-xs">${txt}</span>`;
+
+  // ======================== 図鑑の描画 ========================
+  const cardsEl = document.getElementById('cards');
+  const emptyMsg = document.getElementById('emptyMsg');
+  const qEl = document.getElementById('q');
+  const typeSel = document.getElementById('typeFilter');
+  const sortSel = document.getElementById('sortSel');
+
+  // タイプの選択肢を初期化（"すべて" + 出現タイプの集合）
+  (function initTypeOptions(){
+    const set = new Set();
+    CANDIDATES.forEach(c=>c.types.forEach(t=>set.add(t)));
+    typeSel.innerHTML = `<option value="すべて">すべて</option>` + Array.from(set).map(t=>`<option value="${t}">${t}</option>`).join('');
+  })();
+
+  // 図鑑カード1枚をHTMLで生成
+  function renderCard(c){
+    return `
+    <div class="group relative overflow-hidden rounded-2xl border border-gray-200 bg-white/80 p-4 shadow-sm transition">
+      <div class="flex items-start gap-3">
+        <div class="floaty h-24 w-24">${renderLowPoly(c.no, c.emoji)}</div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-2">
+            <div class="text-xs text-gray-500">No.${String(c.no).padStart(3,'0')}</div>
+            <div class="flex gap-1">${c.types.map(typeBadge).join('')}</div>
+          </div>
+          <h3 class="mt-1 text-lg font-semibold leading-tight">${c.name}<span class="ml-2 text-sm text-gray-500">${c.kana}</span></h3>
+          <p class="mt-1 text-sm text-gray-700">${c.dex}</p>
+        </div>
+      </div>
+      <div class="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+        <dl class="grid grid-cols-3 gap-2 text-xs text-gray-700">
+          <div class="rounded-lg bg-gray-50 p-2"><dt class="text-gray-500">とくせい</dt><dd class="font-medium">${c.ability}</dd></div>
+          <div class="rounded-lg bg-gray-50 p-2"><dt class="text-gray-500">高さ</dt><dd class="font-medium">${c.height}</dd></div>
+          <div class="rounded-lg bg-gray-50 p-2"><dt class="text-gray-500">重さ</dt><dd class="font-medium">${c.weight}</dd></div>
+          <div class="col-span-3 rounded-lg bg-gray-50 p-2">
+            <dt class="text-gray-500">相性</dt>
+            <dd class="mt-1 flex flex-wrap gap-1">${c.strong.map(t=>pill(`得意: ${t}`)).join('')}${c.weak.map(t=>pill(`弱点: ${t}`)).join('')}</dd>
+          </div>
+        </dl>
+        <div class="flex items-center justify-center">${renderRadar(c.stats)}</div>
+      </div>
+      <div class="mt-3">
+        <div class="mb-1 text-sm font-semibold text-slate-700">おぼえるわざ</div>
+        <div class="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+          ${c.moves.map(m=>`
+            <div class="rounded-xl border border-slate-200 bg-white p-2 text-xs">
+              <div class="font-medium">${m.name}</div>
+              <div class="mt-0.5 text-slate-600">${m.desc}</div>
+              <div class="mt-1 flex gap-2 text-slate-500">${pill(`威力 ${m.power}`)}${pill(`命中 ${m.accuracy}%`)}</div>
+            </div>`).join('')}
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // 図鑑の再描画（検索・フィルタ・ソートを反映）
+  function redrawDex(){
+    const key = qEl.value.trim();
+    const type = typeSel.value;
+    const sort = sortSel.value;
+    // フィルタ条件：名前またはかなに部分一致、タイプ一致（"すべて"は無条件）
+    let arr = CANDIDATES.filter(c=>{
+      const okName = [c.name, c.kana].some(v=>v.includes(key));
+      const okType = (type === 'すべて') || c.types.includes(type);
+      return (key==='' || okName) && okType;
+    });
+    // ソート：番号 or 名前
+    if (sort === 'name') arr = [...arr].sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+    if (sort === 'no')   arr = [...arr].sort((a,b)=>a.no - b.no);
+    // DOM反映
+    cardsEl.innerHTML = arr.map(renderCard).join('');
+    emptyMsg.classList.toggle('hidden', arr.length !== 0);
+  }
+
+  // 入力イベントで都度再描画
+  qEl.addEventListener('input', redrawDex);
+  typeSel.addEventListener('change', redrawDex);
+  sortSel.addEventListener('change', redrawDex);
+
+  // 初回描画
+  redrawDex();
+
+  // ======================== バトル機能 ========================
+  // 状態（簡易）：プレイヤー1/2、HP、ターン、終了フラグ
+  let p1 = CANDIDATES[0];
+  let p2 = CANDIDATES[1] || CANDIDATES[0];
+  let hp1 = 100, hp2 = 100;
+  let turn = 1; // 1 or 2
+  let ended = false;
+
+  // 相性：攻撃側タイプが相手の弱点なら×1.2、相手の得意なら×0.8（シンプル）
+  function effectiveness(attacker, defender){
+    let mult = 1.0; let label = '';
+    attacker.types.forEach(t=>{
+      if (defender.weak.includes(t)) { mult *= 1.2; label = 'こうかはばつぐん！'; }
+      if (defender.strong.includes(t)) { mult *= 0.8; label = 'いまひとつ…'; }
+    });
+    return { mult, label };
+  }
+
+  // HPバー色（緑→黄→赤）
+  function hpColor(h){ return h>60? 'bg-emerald-500' : h>30? 'bg-amber-500' : 'bg-rose-500'; }
+
+  // DOM取得（バトル）
+  const selP1 = document.getElementById('selP1');
+  const selP2 = document.getElementById('selP2');
+  const name1 = document.getElementById('name1');
+  const name2 = document.getElementById('name2');
+  const hp1El = document.getElementById('hp1');
+  const hp2El = document.getElementById('hp2');
+  const hpbar1 = document.getElementById('hpbar1');
+  const hpbar2 = document.getElementById('hpbar2');
+  const moves1 = document.getElementById('moves1');
+  const moves2 = document.getElementById('moves2');
+  const ava1 = document.getElementById('ava1');
+  const ava2 = document.getElementById('ava2');
+  const resetBtn = document.getElementById('resetBtn');
+  const turnLbl = document.getElementById('turnLbl');
+  const log = document.getElementById('log');
+
+  // セレクトの選択肢を候補で埋める
+  function initSelectors(){
+    const opt = c => `<option value="${c.no}">${c.name}</option>`;
+    selP1.innerHTML = CANDIDATES.map(opt).join('');
+    selP2.innerHTML = CANDIDATES.map(opt).join('');
+    selP1.value = p1.no; selP2.value = p2.no;
+  }
+
+  // 候補データからUIを更新
+  function syncUI(){
+    name1.textContent = p1.name; name2.textContent = p2.name;
+    hp1El.textContent = hp1; hp2El.textContent = hp2;
+    hpbar1.style.width = hp1 + '%'; hpbar2.style.width = hp2 + '%';
+    hpbar1.className = 'h-2 rounded ' + hpColor(hp1);
+    hpbar2.className = 'h-2 rounded ' + hpColor(hp2);
+    ava1.innerHTML = renderLowPoly(p1.no, p1.emoji);
+    ava2.innerHTML = renderLowPoly(p2.no, p2.emoji);
+    // 技ボタン作成（自分のターン以外はdisabled）
+    moves1.innerHTML = p1.moves.map(m=>`<button class="rounded-xl border border-slate-300 px-3 py-2 text-left text-sm ${turn!==1||ended?'opacity-50 pointer-events-none':''}" data-m="${m.name}"><div class="font-medium">${m.name}</div><div class="text-xs text-slate-500">威力${m.power} 命中${m.accuracy}%</div></button>`).join('');
+    moves2.innerHTML = p2.moves.map(m=>`<button class="rounded-xl border border-slate-300 px-3 py-2 text-left text-sm ${turn!==2||ended?'opacity-50 pointer-events-none':''}" data-m="${m.name}"><div class="font-medium">${m.name}</div><div class="text-xs text-slate-500">威力${m.power} 命中${m.accuracy}%</div></button>`).join('');
+    turnLbl.textContent = ended ? 'バトル終了' : `ターン：${turn===1 ? p1.name : p2.name}`;
+  }
+
+  // ログの先頭に追記
+  function pushLog(text){
+    const div = document.createElement('div');
+    div.className = 'leading-6';
+    div.textContent = `• ${text}`;
+    // 最初の空ログ文を削除
+    const first = log.firstElementChild; if (first && first.classList.contains('text-slate-500')) first.remove();
+    log.prepend(div);
+  }
+
+  // リセット
+  function resetBattle(){ hp1=100; hp2=100; turn=1; ended=false; log.innerHTML = '<div class="text-slate-500">ログはここに表示されます。</div>'; syncUI(); }
+
+  // 与ダメ計算：
+  //  1) 命中判定（乱数）
+  //  2) 相性倍率（1.2/0.8）
+  //  3) 攻撃側 = (交渉力+実行力)/2、防御側 = 危機対応 を係数化し、
+  //  4) 基礎威力 × 攻撃係数 × 0.6 - 防御係数×0.2 をベースに、最低5ダメ保証
+  function act(move){
+    if (ended) return;
+    const atk = (turn===1) ? p1 : p2;
+    const def = (turn===1) ? p2 : p1;
+    // 命中判定
+    if (Math.random()*100 >= move.accuracy){ pushLog(`${atk.name} の「${move.name}」は外れた！`); turn = (turn===1)?2:1; syncUI(); return; }
+    // 相性
+    const { mult, label } = effectiveness(atk, def);
+    // ざっくり能力反映
+    const atkStat = Math.round((atk.stats.negotiate + atk.stats.execute)/2);
+    const defStat = Math.round(def.stats.crisis);
+    const base = move.power * (atkStat/100) * 0.6;
+    const dmg = Math.max(5, Math.round((base - defStat*0.2) * mult));
+    if (turn===1){ hp2 = Math.max(0, hp2 - dmg); pushLog(`${atk.name} の「${move.name}」！ ${label} ${dmg}ダメージ！`); if (hp2===0){ ended=true; } turn=2; }
+    else { hp1 = Math.max(0, hp1 - dmg); pushLog(`${atk.name} の「${move.name}」！ ${label} ${dmg}ダメージ！`); if (hp1===0){ ended=true; } turn=1; }
+    syncUI();
+  }
+
+  // 技ボタンの委譲クリック（親要素で拾う）
+  moves1.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button'); if (!btn) return;
+    if (turn!==1 || ended) return;
+    const mvName = btn.dataset.m; const mv = p1.moves.find(m=>m.name===mvName);
+    act(mv);
+  });
+  moves2.addEventListener('click', (e)=>{
+    const btn = e.target.closest('button'); if (!btn) return;
+    if (turn!==2 || ended) return;
+    const mvName = btn.dataset.m; const mv = p2.moves.find(m=>m.name===mvName);
+    act(mv);
+  });
+
+  // プレイヤーの切り替え
+  selP1.addEventListener('change', ()=>{ p1 = CANDIDATES.find(c=>c.no==selP1.value); resetBattle(); });
+  selP2.addEventListener('change', ()=>{ p2 = CANDIDATES.find(c=>c.no==selP2.value); resetBattle(); });
+  resetBtn.addEventListener('click', resetBattle);
+
+  // 初期セットアップ
+  initSelectors();
+  document.getElementById('yy').textContent = new Date().getFullYear();
+  syncUI();
+  </script>
+</body>
+</html>
